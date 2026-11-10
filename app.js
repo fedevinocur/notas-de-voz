@@ -28,6 +28,8 @@ const el = {
   btnCopy: $('#btn-copy'), btnShare: $('#btn-share'), btnDelete: $('#btn-delete'),
   editor: $('#editor'), live: $('#live'), liveFinal: $('#live-final'), liveInterim: $('#live-interim'), liveTail: $('#live-tail'),
   btnFolder: $('#btn-folder'), folderBanner: $('#folder-banner'),
+  btnSelect: $('#btn-select'), selClose: $('#sel-close'), selCount: $('#sel-count'), selAll: $('#sel-all'),
+  selLabel: $('#sel-label'), selShare: $('#sel-share'), selDelete: $('#sel-delete'),
   mic: $('#btn-mic'), recStatus: $('#rec'), recTime: $('#rec-time'), recLangs: $('#rec-langs'),
   menuLangs: $('#menu-langs'), filters: $('#filters'), btnLabel: $('#btn-label'),
   btnPunct: $('#btn-punct'), btnAi: $('#btn-ai'),
@@ -88,6 +90,8 @@ let notes = [];
 let currentId = null;
 let query = '';
 let filterLabel = null; // id del color por el que se está filtrando la lista
+let selecting = false;   // modo selección: se entra con un toque largo sobre una nota
+const selected = new Set();
 let depth = 0;          // cuántas pantallas abrimos desde la lista, para el botón volver
 let listScroll = 0;
 let saveTimer = null;
@@ -101,6 +105,8 @@ const newId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toStri
 const fmtTime = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit' });
 const fmtDay = new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' });
 const fmtDayYear = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'long', year: 'numeric' });
+// Fecha completa, para textos que salen de la app (compartir, exportar): "Hoy" ahí no dice nada.
+const fullStamp = (ts) => `${fmtDayYear.format(new Date(ts))}, ${fmtTime.format(new Date(ts))}`;
 
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 
@@ -152,10 +158,15 @@ function renderList() {
     const time = fmtTime.format(new Date(n.createdAt));
     if (colorOf(n.label)) m.append(dot(n.label), labelName(n.label) + ' · ' + time);
     else m.textContent = time;
+    const check = document.createElement('span');     // la casilla que se ve en modo selección
+    check.className = 'item-check';
+    check.setAttribute('aria-hidden', 'true');
+    m.append(check);
     b.append(t, m);
     frag.appendChild(b);
   }
   el.list.replaceChildren(frag);
+  renderSelection();
 }
 
 /* ---------- navegación ---------- */
@@ -457,6 +468,7 @@ function tick() {
 }
 
 el.mic.addEventListener('click', () => {
+  if (selecting) return;
   if (dict.active) { stopDictation(); return; }
   if (dict.rec) return;                       // todavía está cerrando el dictado anterior
   if (route().view === 'list') openNote(createNote().id);
@@ -526,7 +538,120 @@ el.btnBack.addEventListener('click', goBack);
 
 el.list.addEventListener('click', (e) => {
   const item = e.target.closest('.item');
-  if (item) openNote(item.dataset.id);
+  if (!item) return;
+  if (suppressClick) { suppressClick = false; return; }     // es el toque largo que recién terminó
+  if (selecting) { toggleSelected(item.dataset.id); return; }
+  openNote(item.dataset.id);
+});
+
+/* ---------- selección de varias notas ----------
+   Un toque largo sobre una nota entra en modo selección; después cada toque suma o saca notas.
+   Las acciones de la barra de arriba (etiqueta, enviar, eliminar) se aplican a todas las elegidas. */
+
+let suppressClick = false;
+let pressTimer = null;
+let pressStart = null;
+
+const selectedNotes = () => notes.filter((n) => selected.has(n.id)).sort((a, b) => b.createdAt - a.createdAt);
+
+function renderSelection() {
+  for (const id of [...selected]) if (!notes.some((n) => n.id === id)) selected.delete(id);
+  document.body.classList.toggle('selecting', selecting);
+  el.selCount.textContent = selected.size === 1 ? '1 nota' : `${selected.size} notas`;
+  for (const item of el.list.querySelectorAll('.item')) {
+    const on = selecting && selected.has(item.dataset.id);
+    item.classList.toggle('is-selected', on);
+    if (selecting) item.setAttribute('aria-pressed', String(on)); else item.removeAttribute('aria-pressed');
+  }
+}
+
+function enterSelection(id) {
+  if (selecting || route().view !== 'list') return;
+  selecting = true;
+  selected.clear();
+  if (id) selected.add(id);
+  toggleMenu(false);
+  el.search.blur();
+  history.pushState({ sel: true }, '');     // así el botón atrás del teléfono sale de la selección
+  renderSelection();
+}
+
+function exitSelection(fromBack) {
+  if (!selecting) return;
+  selecting = false;
+  selected.clear();
+  renderSelection();
+  if (!fromBack && history.state && history.state.sel) history.back();
+}
+
+function toggleSelected(id) {
+  if (selected.has(id)) selected.delete(id); else selected.add(id);
+  if (!selected.size) exitSelection(); else renderSelection();
+}
+
+function cancelPress() {
+  clearTimeout(pressTimer);
+  pressTimer = null;
+  pressStart = null;
+}
+
+el.list.addEventListener('pointerdown', (e) => {
+  suppressClick = false;
+  const item = e.target.closest('.item');
+  if (!item || selecting || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  pressStart = { x: e.clientX, y: e.clientY };
+  pressTimer = setTimeout(() => {
+    pressTimer = null;
+    suppressClick = true;
+    if (navigator.vibrate) navigator.vibrate(12);
+    enterSelection(item.dataset.id);
+  }, 450);
+});
+el.list.addEventListener('pointermove', (e) => {
+  if (pressStart && Math.hypot(e.clientX - pressStart.x, e.clientY - pressStart.y) > 10) cancelPress();   // está deslizando
+});
+for (const type of ['pointerup', 'pointercancel', 'pointerleave']) el.list.addEventListener(type, cancelPress);
+window.addEventListener('scroll', cancelPress, { passive: true });
+el.list.addEventListener('contextmenu', (e) => { if (e.target.closest('.item')) e.preventDefault(); });
+
+el.btnSelect.addEventListener('click', () => {
+  toggleMenu(false);
+  if (!notes.length) { toast('Todavía no hay notas para seleccionar'); return; }
+  enterSelection(null);
+});
+el.selClose.addEventListener('click', () => exitSelection());
+el.selAll.addEventListener('click', () => {
+  for (const item of el.list.querySelectorAll('.item')) selected.add(item.dataset.id);
+  renderSelection();
+});
+el.selLabel.addEventListener('click', () => { if (selected.size) openLabelSheet(); });
+
+el.selShare.addEventListener('click', async () => {
+  const list = selectedNotes();
+  if (!list.length) return;
+  const text = list.length === 1
+    ? list[0].text
+    : list.map((n) => `${fullStamp(n.createdAt)}\n${n.text.trim()}`).join('\n\n----------\n\n');
+  if (navigator.share) {
+    try { await navigator.share({ text }); }
+    catch (e) { if (e.name !== 'AbortError') toast('No se pudo abrir el menú para compartir'); return; }
+  } else {
+    toast((await copyText(text)) ? 'Acá no se puede compartir: quedó copiado' : 'No se pudo compartir');
+  }
+  exitSelection();
+});
+
+el.selDelete.addEventListener('click', () => {
+  const list = selectedNotes();
+  if (!list.length) return;
+  notes = notes.filter((n) => !selected.has(n.id));
+  for (const n of list) { store.del(n.id).catch(() => {}); removeNoteFile(n); }
+  exitSelection();
+  renderList();
+  toast(list.length === 1 ? 'Nota eliminada' : `${list.length} notas eliminadas`, 'Deshacer', () => {
+    for (const n of list) { notes.push(n); restoreNoteFile(n); persist(n); }
+    if (route().view === 'list') renderList();
+  }, 7000);
 });
 
 el.search.addEventListener('input', () => { query = el.search.value; renderList(); });
@@ -689,9 +814,19 @@ function renderLabelChip() {
   else el.btnLabel.replaceChildren('+ Etiqueta');
 }
 
-function renderSheet(editingId) {
+/* Las notas sobre las que actúa el panel de etiquetas: las elegidas, o la que está abierta. */
+function sheetTargets() {
+  if (selecting) return selectedNotes();
   const n = current();
-  if (!n) return;
+  return n ? [n] : [];
+}
+
+function renderSheet(editingId) {
+  const targets = sheetTargets();
+  if (!targets.length) return;
+  // Si todas las notas comparten etiqueta, esa aparece marcada; si no, ninguna.
+  const first = targets[0].label || null;
+  const shared = targets.every((t) => (t.label || null) === first) ? first : undefined;
   const rows = [null, ...COLORS.map((c) => c.id)].map((id) => {
     const row = document.createElement('div');
     row.className = 'sheet-row';
@@ -724,17 +859,28 @@ function renderSheet(editingId) {
     const pick = document.createElement('button');
     pick.className = 'sheet-pick';
     pick.setAttribute('role', 'radio');
-    pick.setAttribute('aria-checked', String((n.label || null) === id));
+    pick.setAttribute('aria-checked', String(shared === id));
     const name = document.createElement('span');
     name.className = 'sheet-name';
     name.textContent = id ? labelName(id) : 'Sin etiqueta';
     pick.append(dot(id), name);
     pick.addEventListener('click', () => {
-      if (id) n.label = id; else delete n.label;
-      n.updatedAt = Date.now();
-      persist(n);
-      renderLabelChip();
-      closeSheet();
+      const now = Date.now();
+      for (const t of targets) {
+        if (id) t.label = id; else delete t.label;
+        t.updatedAt = now;
+        persist(t);
+      }
+      if (selecting) {
+        const count = targets.length;
+        exitAfterSheet = true;            // al cerrarse el panel, se sale de la selección
+        closeSheet();
+        renderList();
+        toast(count === 1 ? 'Etiqueta cambiada' : `Etiqueta cambiada en ${count} notas`);
+      } else {
+        renderLabelChip();
+        closeSheet();
+      }
     });
     row.append(pick);
 
@@ -770,22 +916,34 @@ function showSheet(title) {
 }
 
 function openLabelSheet() {
-  if (!current()) return;
+  if (!sheetTargets().length) return;
   flushSave();
   renderSheet();
   showSheet('Etiqueta');
 }
 
+let skipPop = false;          // el próximo "atrás" lo provocó la app al cerrar un panel
+let exitAfterSheet = false;   // al cerrarse el panel hay que salir también de la selección
+
 function closeSheet(fromBack) {
   if (el.sheet.hidden) return;
   el.sheet.hidden = true;
   el.backdrop.hidden = true;
-  if (!fromBack && history.state && history.state.sheet) history.back();
+  if (!fromBack && history.state && history.state.sheet) { skipPop = true; history.back(); return; }
+  if (exitAfterSheet) { exitAfterSheet = false; exitSelection(); }
 }
 
 el.btnLabel.addEventListener('click', openLabelSheet);
 el.backdrop.addEventListener('click', () => closeSheet());
-window.addEventListener('popstate', () => closeSheet(true));
+window.addEventListener('popstate', () => {
+  if (skipPop) {
+    skipPop = false;
+    if (exitAfterSheet) { exitAfterSheet = false; exitSelection(); }
+    return;
+  }
+  if (!el.sheet.hidden) { closeSheet(true); return; }      // atrás con un panel abierto: se cierra el panel
+  if (selecting) exitSelection(true);                       // atrás en modo selección: se sale
+});
 
 /* ---------- idioma del dictado ---------- */
 
@@ -1042,7 +1200,7 @@ el.btnAi.addEventListener('click', () => { toggleMenu(false); openAiSheet(); });
 
 const folderSupported = 'showDirectoryPicker' in window;
 const RW = { mode: 'readwrite' };
-const folder = { handle: null, state: 'none', trash: [], warned: false, remembered: true };   // state: none | granted | prompt
+const folder = { handle: null, state: 'none', trash: [], warned: false, remembered: true, autoTried: false };   // state: none | granted | prompt
 const fileTimers = new Map();
 let fileQueue = Promise.resolve();
 
@@ -1165,16 +1323,28 @@ async function initFolder() {
 
 const plural = (n) => `${n} ${n === 1 ? 'nota guardada' : 'notas guardadas'}`;
 
-async function reconnectFolder() {
+async function reconnectFolder(quiet) {
   if (!folder.handle) return;
   folder.state = await askFolderPermission(folder.handle, true);     // necesita un toque del usuario
   folder.warned = false;
   renderFolderBanner();
-  if (!el.sheet.hidden) renderFolderSheet();
-  if (folder.state !== 'granted') { toast('La carpeta sigue sin permiso', null, null, 4000); return; }
+  if (!el.sheet.hidden && el.sheetTitle.textContent === 'Guardar en carpeta') renderFolderSheet();
+  if (folder.state !== 'granted') { if (!quiet) toast('La carpeta sigue sin permiso', null, null, 4000); return; }
   const n = await syncFolder();
-  toast(n ? `Carpeta reconectada: ${plural(n)}` : 'Carpeta reconectada');
+  if (!quiet) toast(n ? `Carpeta reconectada: ${plural(n)}` : 'Carpeta reconectada');
 }
+
+/* Chrome en Android no conserva el permiso de la carpeta entre una apertura y otra, y solo deja
+   volver a pedirlo durante un toque del usuario. Por eso la app lo pide sola en el primer toque
+   de uso normal (abrir una nota, terminar un dictado, volver, filtrar), sin tener que ir al aviso.
+   El toque que empieza un dictado queda afuera, para no cruzar ese pedido con el del micrófono. */
+document.addEventListener('click', (e) => {
+  if (!folder.handle || folder.state !== 'prompt' || folder.autoTried) return;
+  const stopTap = e.target.closest('#btn-mic') && dict.active;
+  if (!stopTap && !e.target.closest('.item, #btn-back, .filter, .lang')) return;
+  folder.autoTried = true;
+  reconnectFolder(true);
+}, true);
 
 async function pickFolder() {
   let handle;
@@ -1222,7 +1392,7 @@ function forgetFolder() {
 function exportTxt() {
   if (!notes.length) { toast('Todavía no hay notas para exportar'); return; }
   const sorted = notes.slice().sort((a, b) => b.createdAt - a.createdAt);
-  const body = sorted.map((n) => `${dayLabel(n.createdAt)}, ${fmtTime.format(new Date(n.createdAt))}\n${n.text.trim()}`).join('\n\n----------\n\n') + '\n';
+  const body = sorted.map((n) => `${fullStamp(n.createdAt)}\n${n.text.trim()}`).join('\n\n----------\n\n') + '\n';
   const url = URL.createObjectURL(new Blob([body], { type: 'text/plain;charset=utf-8' }));
   const a = document.createElement('a');
   a.href = url;
@@ -1275,7 +1445,7 @@ function openFolderSheet() {
 }
 
 el.btnFolder.addEventListener('click', () => { toggleMenu(false); openFolderSheet(); });
-el.folderBanner.addEventListener('click', reconnectFolder);
+el.folderBanner.addEventListener('click', () => reconnectFolder(false));
 
 /* ---------- teclado en pantalla ---------- */
 

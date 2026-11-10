@@ -39,6 +39,22 @@
     <button id="btn-menu" class="icon-btn" aria-label="Más opciones" aria-haspopup="true" aria-expanded="false">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.1"/><circle cx="12" cy="12" r="1.1"/><circle cx="12" cy="19" r="1.1"/></svg>
     </button>
+    <div id="selbar" class="selbar">
+      <button id="sel-close" class="icon-btn" aria-label="Salir de la selección">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <div id="sel-count" class="sel-count" aria-live="polite"></div>
+      <button id="sel-all" class="sel-all">Todas</button>
+      <button id="sel-label" class="icon-btn" aria-label="Cambiar la etiqueta de las notas elegidas" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h8l8 8-8 8-8-8V4Z"/><path d="M8.5 8.5h.01"/></svg>
+      </button>
+      <button id="sel-share" class="icon-btn" aria-label="Enviar las notas elegidas a otra app">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 18 6M9 6h9v9"/></svg>
+      </button>
+      <button id="sel-delete" class="icon-btn" aria-label="Eliminar las notas elegidas">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l.8 12.5h9.4L17.5 7"/></svg>
+      </button>
+    </div>
     <div id="menu" class="menu" hidden>
       <div class="menu-title">Idioma del dictado</div>
       <div id="menu-langs"></div>
@@ -46,6 +62,7 @@
       <button id="btn-ai">Puntuación con IA</button>
       <button id="btn-folder">Guardar en carpeta</button>
       <hr>
+      <button id="btn-select">Seleccionar notas</button>
       <button id="btn-export">Exportar copia</button>
       <button id="btn-import">Importar copia</button>
     </div>

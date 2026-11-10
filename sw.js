@@ -1,6 +1,6 @@
 /* Guarda la app en el teléfono para que abra sin conexión.
    Con internet siempre trae la versión nueva; sin internet usa la guardada. */
-const CACHE = 'notas-de-voz-v6';
+const CACHE = 'notas-de-voz-v7';
 const ASSETS = ['./', 'index.html', 'styles.css', 'theme.js', 'app.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/monochrome-512.png',
   'fonts/league-spartan-latin-800-normal.woff2', 'fonts/courier-prime-latin-400-normal.woff2',

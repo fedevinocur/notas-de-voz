@@ -69,7 +69,7 @@ p { margin: 0; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* La letra de guion de todos los datos chicos. */
-.script, .day, .item-meta, .note-date, .back, .tool, .filter, .lang, .rec, .menu, .search input, .toast button, .empty p:not(.empty-title), .field-label, .key-saved {
+.script, .day, .item-meta, .sel-count, .sel-all, .note-date, .back, .tool, .filter, .lang, .rec, .menu, .search input, .toast button, .empty p:not(.empty-title), .field-label, .key-saved {
   font-family: var(--script);
   font-size: 12.5px;
   line-height: 1.4;
@@ -148,6 +148,25 @@ html.is-theming *, html.is-theming *::before, html.is-theming *::after { transit
 .menu hr { margin: 6px 16px; border: 0; border-top: 1px solid var(--line); }
 .menu-opt::after { content: "[ ]"; white-space: pre; color: var(--muted); }
 .menu-opt[aria-checked="true"]::after { content: "[×]"; color: var(--fg); }
+
+/* ---------- selección de varias notas ---------- */
+
+.selbar { display: none; flex: 1; align-items: center; min-width: 0; margin-left: -11px; }
+body.selecting .selbar { display: flex; }
+body.selecting .top > .title, body.selecting #btn-theme, body.selecting #btn-menu { display: none; }
+body.selecting .dock { display: none; }
+.sel-count { flex: 1; min-width: 0; padding-left: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sel-all { min-height: 44px; padding: 0 12px; transition: color .35s var(--ease); }
+.sel-all:active { color: var(--accent); }
+
+.item { position: relative; -webkit-touch-callout: none; }
+.item-check { display: none; margin-left: auto; white-space: pre; }
+.item-check::before { content: "[ ]"; }
+body.selecting .item-check { display: inline; }
+.item.is-selected .item-check { color: var(--fg); }
+.item.is-selected .item-check::before { content: "[×]"; }
+/* La nota elegida lleva un filete de tinta en el margen, sin mover el texto. */
+.item.is-selected::before { content: ""; position: absolute; left: -12px; top: -1px; bottom: -1px; width: 3px; background: var(--fg); }
 
 /* Aviso de que la carpeta de archivos perdió el permiso. */
 .banner {
