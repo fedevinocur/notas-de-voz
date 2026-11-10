@@ -1,0 +1,7 @@
+Tipografías incluidas, todas bajo la SIL Open Font License 1.1 (https://openfontlicense.org):
+
+- League Spartan, de The League of Moveable Type
+- Courier Prime, de Quote-Unquote Apps
+- Archivo, de Omnibus-Type
+
+El archivo vendor/anthropic-sdk.js es el SDK oficial de Anthropic para JavaScript (@anthropic-ai/sdk), bajo licencia MIT.
